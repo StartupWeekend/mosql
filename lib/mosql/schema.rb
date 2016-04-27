@@ -150,7 +150,18 @@ module MoSQL
         key = pieces.shift
         breadcrumbs << [obj, key]
         obj = obj[key]
-        return nil unless obj.is_a?(Hash)
+
+        unless obj.is_a?(Hash)
+          if obj.kind_of?(Array)
+            obj_array = obj.map { |embedded|
+              fetch_and_delete_dotted(embedded, pieces.join("."))
+            }.compact
+
+            return obj_array.empty? ? nil : obj_array
+          else
+            return nil
+          end
+        end
       end
 
       val = obj.delete(pieces.first)
