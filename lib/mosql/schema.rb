@@ -45,7 +45,21 @@ module MoSQL
     def parse_spec(ns, spec)
       out = spec.dup
       out[:columns] = to_array(spec.fetch(:columns))
+
+      # TODO: Add Associations Workflow
+      if out[:associations]
+        out[:associations] = out[:associations].map do |association|
+          association[:meta] = parse_meta(association[:meta])
+          association[:columns] = to_array(association.fetch(:columns))
+
+          check_columns!(ns + "." + association.keys.first, association)
+
+          association
+        end
+      end
+
       check_columns!(ns, out)
+
       out
     end
 
