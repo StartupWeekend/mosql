@@ -1,5 +1,8 @@
 #!/usr/bin/env ruby
 
+$:.unshift File.expand_path('../../lib', __FILE__)
+require 'pry'
+
 require 'mosql/cli'
 
 MoSQL::CLI.run(ARGV)
