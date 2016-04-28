@@ -114,12 +114,32 @@ module MoSQL
         end
 
         log.info("Importing for Mongo DB #{dbname}...")
-        db = @mongo.db(dbname)
-        collections = db.collections.select { |c| spec.key?(c.name) }
 
+        db = @mongo.db(dbname)
+
+        # Handle Dot Notation to fetch the collection
+        collections = spec.keys.inject([]) do |memo, key|
+          if key.kind_of?(String)
+            pieces = key.split(".")
+            connection = db.collections.find { |c| c.name == pieces.first }
+
+            if connection
+              memo << { connection: connection, ns: key }
+            end
+          end
+
+          memo
+        end
+
+        # Split the Collection Spec object to fetch the collection and spec hash
         collections.each do |collection|
-          ns = "#{dbname}.#{collection.name}"
-          import_collection(ns, collection, spec[collection.name][:meta][:filter])
+          connection = collection[:connection]
+          spec_name_space = collection[:ns]
+          ns = "#{dbname}.#{spec_name_space}"
+
+          puts("Initial Import :: ns=#{ns} spec_name_space=#{spec_name_space}")
+
+          import_collection(ns, connection, spec[spec_name_space][:meta][:filter])
           exit(0) if @done
         end
       end
