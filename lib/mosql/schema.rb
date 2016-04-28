@@ -72,12 +72,15 @@ module MoSQL
     end
 
     def initialize(map)
+      puts 'Schema#initialize'
+
       @map = {}
       map.each do |dbname, db|
         @map[dbname] = { :meta => parse_meta(db[:meta]) }
         db.each do |cname, spec|
           next unless cname.is_a?(String)
           begin
+            # [database name][collection name]
             @map[dbname][cname] = parse_spec("#{dbname}.#{cname}", spec)
           rescue KeyError => e
             raise SchemaError.new("In spec for #{dbname}.#{cname}: #{e}")
@@ -90,17 +93,26 @@ module MoSQL
     end
 
     def create_schema(db, clobber=false)
+      puts 'Schema#create_schema'
+
+      # Builds the Schema
       @map.values.each do |dbspec|
         dbspec.each do |n, collection|
           next unless n.is_a?(String)
+
+          # START SchemaBuilder
           meta = collection[:meta]
           composite_key = meta[:composite_key]
           keys = []
           log.info("Creating table '#{meta[:table]}'...")
+
+          # db.send(method, table_name) block
           db.send(clobber ? :create_table! : :create_table?, meta[:table]) do
+
+            # Iterate through Columns. START Recursion
             collection[:columns].each do |col|
               opts = {}
-              if col[:source] == '$timestamp'
+              if col[:source] == '$timestamp' # Magic Keyword for Time.now
                 opts[:default] = Sequel.function(:now)
               end
               column col[:name], col[:type], opts
@@ -125,6 +137,8 @@ module MoSQL
                 end
               column '_extra_props', type
             end
+
+            # END Recursion
           end
         end
       end
@@ -152,6 +166,7 @@ module MoSQL
     end
 
     def find_ns!(ns)
+      # Will Need to figure how to make this work in the recursive workflow.
       schema = find_ns(ns)
       raise SchemaError.new("No mapping for namespace: #{ns}") if schema.nil?
       schema
@@ -180,6 +195,7 @@ module MoSQL
 
       val = obj.delete(pieces.first)
 
+      # Unwinds the object
       breadcrumbs.reverse.each do |obj, key|
         obj.delete(key) if obj[key].empty?
       end
@@ -198,6 +214,7 @@ module MoSQL
     end
 
     def fetch_special_source(obj, source, original)
+      # Function to handle special sources
       case source
       when "$timestamp"
         Sequel.function(:now)
@@ -246,6 +263,7 @@ module MoSQL
           v = fetch_special_source(obj, source, original)
         else
           v = fetch_and_delete_dotted(obj, source)
+
           case v
           when Hash
             v = JSON.dump(Hash[v.map { |k,v| [k, transform_primitive(v)] }])
