@@ -244,7 +244,7 @@ module MoSQL
       end
     end
 
-    def transform(ns, obj, schema=nil)
+    def transform(ns, obj, schema=nil, parent_obj=nil)
       schema ||= find_ns!(ns)
 
       original = obj
@@ -253,13 +253,36 @@ module MoSQL
       # mutating embedded objects.
       obj = BSON.deserialize(BSON.serialize(obj))
 
+      if parent_obj
+        parent_original = parent_obj
+
+        # Do a deep clone, because we're potentially going to be
+        # mutating embedded objects.
+        parent_obj = BSON.deserialize(BSON.serialize(parent_obj))
+      end
+
       row = []
       schema[:columns].each do |col|
 
         source = col[:source]
         type = col[:type]
 
-        if source.start_with?("$")
+        if source.start_with?("$parent")
+          v = fetch_and_delete_dotted(parent_obj, source.sub("$parent.",""))
+          case v
+          when Hash
+            v = JSON.dump(Hash[v.map { |k,v| [k, transform_primitive(v)] }])
+          when Array
+            v = v.map { |it| transform_primitive(it) }
+            if col[:array_type]
+              v = Sequel.pg_array(v, col[:array_type])
+            else
+              v = JSON.dump(v)
+            end
+          else
+            v = transform_primitive(v, type)
+          end
+        elsif source.start_with?("$")
           v = fetch_special_source(obj, source, original)
         else
           v = fetch_and_delete_dotted(obj, source)

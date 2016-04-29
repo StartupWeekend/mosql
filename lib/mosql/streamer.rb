@@ -161,11 +161,24 @@ module MoSQL
 
       start    = Time.now
       sql_time = 0
+      embedded_document_flag = (ns.count(".") == 2)
+      embedded_key = ns.split(".").last
+
       collection.find(filter, :batch_size => BATCH) do |cursor|
         with_retries do
           cursor.each do |obj|
-            batch << @schema.transform(ns, obj)
-            count += 1
+
+            if embedded_document_flag
+              if obj.has_key?(embedded_key)
+                obj[embedded_key].each do |embedded_obj|
+                  batch << @schema.transform(ns, embedded_obj, nil, obj)
+                  count += 1
+                end
+              end
+            else
+              batch << @schema.transform(ns, obj)
+              count += 1
+            end
 
             if batch.length >= BATCH
               sql_time += track_time do
