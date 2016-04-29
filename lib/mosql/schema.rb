@@ -10,9 +10,10 @@ module MoSQL
         if ent.is_a?(Hash) && ent[:source].is_a?(String) && ent[:type].is_a?(String)
           # new configuration format
           col = {
-            :source => ent.fetch(:source),
-            :type   => ent.fetch(:type),
-            :name   => (ent.keys - [:source, :type]).first,
+            :source  => ent.fetch(:source),
+            :type    => ent.fetch(:type),
+            :name    => (ent.keys - [:source, :type]).first,
+            :default => ent[:default]
           }
         elsif ent.is_a?(Hash) && ent.keys.length == 1 && ent.values.first.is_a?(String)
           col = {
@@ -266,6 +267,7 @@ module MoSQL
 
         source = col[:source]
         type = col[:type]
+        default = col[:default]
 
         if source.start_with?("$parent")
           v = fetch_and_delete_dotted(parent_obj, source.sub("$parent.",""))
@@ -282,6 +284,9 @@ module MoSQL
           else
             v = transform_primitive(v, type)
           end
+        elsif source == "$static"
+          v = default
+
         elsif source.start_with?("$")
           v = fetch_special_source(obj, source, original)
         else
