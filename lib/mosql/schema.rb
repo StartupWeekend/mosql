@@ -4,6 +4,8 @@ module MoSQL
   class Schema
     include MoSQL::Logging
 
+    WHITELIST_DUPLICATE_SOURCES = ['$static']
+
     def to_array(lst)
       lst.map do |ent|
         col = nil
@@ -36,7 +38,7 @@ module MoSQL
     def check_columns!(ns, spec)
       seen = Set.new
       spec[:columns].each do |col|
-        if seen.include?(col[:source])
+        if seen.include?(col[:source]) && !WHITELIST_DUPLICATE_SOURCES.include?(col[:source])
           raise SchemaError.new("Duplicate source #{col[:source]} in column definition #{col[:name]} for #{ns}.")
         end
         seen.add(col[:source])
@@ -104,39 +106,42 @@ module MoSQL
           log.info("Creating table '#{meta[:table]}'...")
 
           # db.send(method, table_name) block
-          db.send(clobber ? :create_table! : :create_table?, meta[:table]) do
-
-            # Iterate through Columns. START Recursion
-            collection[:columns].each do |col|
-              opts = {}
-              if col[:source] == '$timestamp' # Magic Keyword for Time.now
-                opts[:default] = Sequel.function(:now)
-              end
-              column col[:name], col[:type], opts
-
-              if composite_key and composite_key.include?(col[:name])
-                keys << col[:name].to_sym
-              elsif not composite_key and col[:source].to_sym == :_id
-                keys << col[:name].to_sym
-              end
-            end
-
-            primary_key keys
-            if meta[:extra_props]
-              type =
-                case meta[:extra_props]
-                when 'JSON'
-                  'JSON'
-                when 'JSONB'
-                  'JSONB'
-                else
-                  'TEXT'
+          # begin
+            db.send(clobber ? :create_table! : :create_table?, meta[:table]) do
+              # Iterate through Columns. START Recursion
+              collection[:columns].each do |col|
+                opts = {}
+                if col[:source] == '$timestamp' # Magic Keyword for Time.now
+                  opts[:default] = Sequel.function(:now)
                 end
-              column '_extra_props', type
-            end
+                column col[:name], col[:type], opts
 
-            # END Recursion
-          end
+                if composite_key and composite_key.include?(col[:name])
+                  keys << col[:name].to_sym
+                elsif not composite_key and col[:source].to_sym == :_id
+                  keys << col[:name].to_sym
+                end
+              end
+
+              primary_key keys
+              if meta[:extra_props]
+                type =
+                  case meta[:extra_props]
+                  when 'JSON'
+                    'JSON'
+                  when 'JSONB'
+                    'JSONB'
+                  else
+                    'TEXT'
+                  end
+                column '_extra_props', type
+              end
+
+              # END Recursion
+            end
+          # rescue Exception => e
+          #   binding.pry
+          # end
         end
       end
     end
@@ -265,6 +270,8 @@ module MoSQL
         type = col[:type]
         default = col[:default]
 
+        next if type =~ /SERIAL/i
+
         if source.start_with?("$parent")
           v = fetch_and_delete_dotted(parent_obj, source.sub("$parent.",""))
           case v
@@ -339,10 +346,14 @@ module MoSQL
       col[:source] != '$timestamp'
     end
 
+    def serial_type?(col)
+      col[:type] == 'SERIAL'
+    end
+
     def all_columns(schema, copy=false)
       cols = []
       schema[:columns].each do |col|
-        cols << col[:name] unless copy && !copy_column?(col)
+        cols << col[:name] unless copy && !copy_column?(col) || serial_type?(col)
       end
       if schema[:meta][:extra_props]
         cols << "_extra_props"
