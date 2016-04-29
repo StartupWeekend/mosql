@@ -168,23 +168,37 @@ module MoSQL
             if embedded_document_flag
               if obj.has_key?(embedded_key)
                 obj[embedded_key].each do |embedded_obj|
+
                   batch << @schema.transform(ns, embedded_obj, nil, obj)
                   count += 1
+
+                  if batch.length >= BATCH
+                    sql_time += track_time do
+                      bulk_upsert(table, ns, batch)
+                    end
+                    elapsed = Time.now - start
+                    log.info("Imported #{count} rows (#{elapsed}s, #{sql_time}s SQL)...")
+                    batch.clear
+                    exit(0) if @done
+                  end
+
                 end
               end
             else
+
               batch << @schema.transform(ns, obj)
               count += 1
-            end
 
-            if batch.length >= BATCH
-              sql_time += track_time do
-                bulk_upsert(table, ns, batch)
+              if batch.length >= BATCH
+                sql_time += track_time do
+                  bulk_upsert(table, ns, batch)
+                end
+                elapsed = Time.now - start
+                log.info("Imported #{count} rows (#{elapsed}s, #{sql_time}s SQL)...")
+                batch.clear
+                exit(0) if @done
               end
-              elapsed = Time.now - start
-              log.info("Imported #{count} rows (#{elapsed}s, #{sql_time}s SQL)...")
-              batch.clear
-              exit(0) if @done
+
             end
           end
         end
