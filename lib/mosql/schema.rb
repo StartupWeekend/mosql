@@ -73,8 +73,6 @@ module MoSQL
     end
 
     def initialize(map)
-      puts 'Schema#initialize'
-
       @map = {}
       map.each do |dbname, db|
         @map[dbname] = { :meta => parse_meta(db[:meta]) }
@@ -94,8 +92,6 @@ module MoSQL
     end
 
     def create_schema(db, clobber=false)
-      puts 'Schema#create_schema'
-
       # Builds the Schema
       @map.values.each do |dbspec|
         dbspec.each do |n, collection|

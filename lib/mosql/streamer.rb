@@ -136,9 +136,6 @@ module MoSQL
           connection = collection[:connection]
           spec_name_space = collection[:ns]
           ns = "#{dbname}.#{spec_name_space}"
-
-          puts("Initial Import :: ns=#{ns} spec_name_space=#{spec_name_space}")
-
           import_collection(ns, connection, spec[spec_name_space][:meta][:filter])
           exit(0) if @done
         end
