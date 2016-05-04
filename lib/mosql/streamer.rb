@@ -158,16 +158,21 @@ module MoSQL
 
       start    = Time.now
       sql_time = 0
-      embedded_document_flag = (ns.count(".") == 2)
-      embedded_key = ns.split(".").last
+      embedded_document_flag = (ns.count(".") > 1)
 
       collection.find(filter, :batch_size => BATCH) do |cursor|
         with_retries do
           cursor.each do |obj|
 
             if embedded_document_flag
-              if obj.has_key?(embedded_key)
-                obj[embedded_key].each do |embedded_obj|
+
+              embedded_path = ns.split(".")
+
+              # Remove collection and parent paths
+              embedded_path.shift(2)
+
+              if embedded_collection = obj.dig(*embedded_path)
+                embedded_collection.each do |embedded_obj|
 
                   batch << @schema.transform(ns, embedded_obj, nil, obj)
                   count += 1
